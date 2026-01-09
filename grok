@@ -71,7 +71,7 @@ marked.setOptions({
 const config = new Conf({
     projectName: 'grok-cli',
     defaults: {
-        model: 'grok-4',
+        model: 'grok-4-1-fast',
         temperature: 0.7,
         maxTokens: 2048,
         streamMode: true,
@@ -113,10 +113,10 @@ let client = null;
 
 // Available models
 const MODELS = {
-    'grok-4': { name: 'Grok-4', context: 256000, vision: true, tools: true, search: true },
+    'grok-4-1-fast': { name: 'grok-4-1-fast', context: 256000, vision: true, tools: true, search: true },
     'grok-3': { name: 'Grok-3', context: 131072, vision: false, tools: true, search: true },
     'grok-3-mini': { name: 'Grok-3 Mini', context: 131072, vision: false, tools: true, search: true },
-    'grok-2-image-1212': { name: 'Grok-2 Image', context: 131072, vision: false, tools: false, search: false, imageGen: true }
+    'grok-2-image-latest': { name: 'Grok-2 Image', context: 131072, vision: false, tools: false, search: false, imageGen: true }
 };
 
 // Chat history management
@@ -279,7 +279,7 @@ async function showWelcomeScreen() {
     console.clear();
     
     // Animated ASCII art
-    const asciiArt = figlet.textSync('GROK-4 CLI', {
+    const asciiArt = figlet.textSync('grok-4-1-fast CLI', {
         font: 'ANSI Shadow',
         horizontalLayout: 'fitted',
         verticalLayout: 'default'
@@ -303,7 +303,7 @@ async function showWelcomeScreen() {
     await new Promise(resolve => setTimeout(resolve, 800));
     spinner.text = 'Activating quantum reasoning engine...';
     await new Promise(resolve => setTimeout(resolve, 600));
-    spinner.succeed(chalk.green('✨ Grok-4 CLI Ready!'));
+    spinner.succeed(chalk.green('✨ grok-4-1-fast CLI Ready!'));
     
     // System info box
     const systemInfo = boxen(
@@ -410,10 +410,6 @@ async function processSlashCommand(command, chatHistory, rl) {
                 ['/image', 'Generate images with Grok-2'],
                 ['/vision', 'Analyze an image'],
                 ['/tools', `Toggle function calling (currently: ${processSlashCommand.toolsEnabled ? 'ON' : 'OFF'})`],
-                ['/shell <cmd>', 'Execute shell command'],
-                ['/cwd', 'Show current working directory'],
-                ['/bg', 'List background processes'],
-                ['/tasks', 'View agent task list'],
                 ['/config', 'Configure settings'],
                 ['/export', 'Export conversation'],
                 ['/tokens', 'Show token usage'],
@@ -553,7 +549,7 @@ async function processSlashCommand(command, chatHistory, rl) {
             const imageSpinner = ora('Generating image...').start();
             try {
                 const response = await client.images.generate({
-                    model: 'grok-2-image-1212',
+                    model: 'grok-2-image-latest',
                     prompt: imagePrompt,
                     n: 1,
                     response_format: 'url'
@@ -616,7 +612,7 @@ async function processSlashCommand(command, chatHistory, rl) {
                     const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
                     
                     const response = await client.chat.completions.create({
-                        model: 'grok-4',
+                        model: 'grok-2-vision-latest',
                         messages: [{
                             role: 'user',
                             content: [
@@ -668,7 +664,7 @@ async function processSlashCommand(command, chatHistory, rl) {
                     const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
                     
                     const response = await client.chat.completions.create({
-                        model: 'grok-4',
+                        model: 'grok-4-1-fast',
                         messages: [{
                             role: 'user',
                             content: [
@@ -913,111 +909,7 @@ async function processSlashCommand(command, chatHistory, rl) {
                 console.log(chalk.dim('Grok can now create, read, and modify files for you.'));
             }
             return true;
-
-        case '/shell':
-        case '/sh':
-            // Execute shell command directly
-            const shellCmd = input.substring(input.indexOf(' ') + 1).trim();
-            if (!shellCmd || shellCmd === '/shell' || shellCmd === '/sh') {
-                console.log(chalk.yellow('Usage: /shell <command>'));
-                return true;
-            }
-
-            try {
-                const { ShellManager } = require('./lib/shell');
-                if (!processSlashCommand.shellManager) {
-                    processSlashCommand.shellManager = new ShellManager();
-                }
-
-                const spinner = ora('Executing command...').start();
-                const result = await processSlashCommand.shellManager.execute(shellCmd);
-                spinner.stop();
-
-                console.log(chalk.cyan('\n--- Command Output ---'));
-                if (result.stdout) console.log(result.stdout);
-                if (result.stderr) console.log(chalk.yellow(result.stderr));
-                if (result.exitCode !== 0) {
-                    console.log(chalk.red(`Exit code: ${result.exitCode}`));
-                }
-                console.log(chalk.dim(`Duration: ${result.duration}ms`));
-            } catch (error) {
-                console.log(chalk.red(`Error: ${error.message}`));
-            }
-            return true;
-
-        case '/cwd':
-        case '/pwd':
-            // Show current working directory
-            try {
-                const { ShellManager } = require('./lib/shell');
-                if (!processSlashCommand.shellManager) {
-                    processSlashCommand.shellManager = new ShellManager();
-                }
-
-                const cwd = processSlashCommand.shellManager.getCwd();
-                console.log(chalk.cyan(`Current directory: ${cwd}`));
-            } catch (error) {
-                console.log(chalk.red(`Error: ${error.message}`));
-            }
-            return true;
-
-        case '/bg':
-        case '/background':
-            // List background processes
-            try {
-                const { ShellManager } = require('./lib/shell');
-                if (!processSlashCommand.shellManager) {
-                    processSlashCommand.shellManager = new ShellManager();
-                }
-
-                const session = processSlashCommand.shellManager.getSession();
-                const processes = session.listBackgroundProcesses();
-
-                if (processes.length === 0) {
-                    console.log(chalk.dim('No background processes'));
-                } else {
-                    const bgTable = new Table({
-                        head: ['ID', 'PID', 'Command', 'Status', 'Started'],
-                        style: { head: ['cyan'] }
-                    });
-
-                    processes.forEach(proc => {
-                        const status = proc.completed ?
-                            (proc.exitCode === 0 ? chalk.green('✓ Done') : chalk.red('✗ Failed')) :
-                            chalk.blue('Running');
-
-                        const started = new Date(proc.startTime).toLocaleTimeString();
-
-                        bgTable.push([
-                            proc.id,
-                            proc.pid,
-                            proc.command.substring(0, 40),
-                            status,
-                            started
-                        ]);
-                    });
-
-                    console.log('\n' + bgTable.toString() + '\n');
-                }
-            } catch (error) {
-                console.log(chalk.red(`Error: ${error.message}`));
-            }
-            return true;
-
-        case '/tasks':
-            // View agent task list
-            try {
-                const { TaskManager } = require('./lib/agent');
-                if (!processSlashCommand.taskManager) {
-                    processSlashCommand.taskManager = new TaskManager();
-                }
-
-                processSlashCommand.taskManager.display();
-            } catch (error) {
-                console.log(chalk.red(`Error: ${error.message}`));
-            }
-            return true;
-
+            
         case '/exit':
         case '/quit':
             rl.close();
@@ -1170,7 +1062,7 @@ When a user asks you to create a file, USE THE write_file or create_file functio
                 
                 // Calculate cost
                 const modelPricing = {
-                    'grok-4': { input: 3.00, output: 15.00 },
+                    'grok-4-1-fast': { input: 3.00, output: 15.00 },
                     'grok-3': { input: 3.00, output: 15.00 },
                     'grok-3-mini': { input: 0.30, output: 0.50 }
                 };
@@ -1242,7 +1134,7 @@ When a user asks you to create a file, USE THE write_file or create_file functio
                 
                 // Calculate cost
                 const modelPricing = {
-                    'grok-4': { input: 3.00, output: 15.00 },
+                    'grok-4-1-fast': { input: 3.00, output: 15.00 },
                     'grok-3': { input: 3.00, output: 15.00 },
                     'grok-3-mini': { input: 0.30, output: 0.50 }
                 };
@@ -1420,7 +1312,7 @@ async function startInteractiveChat() {
                         console.log(chalk.green(`✓ Conversation saved to: ${savedPath}`));
                     }
                     
-                    console.log(gradient(['#ffffff', '#888888', '#333333', '#888888', '#ffffff'])('\n\n👋 Thank you for using Grok-4 CLI!\n'));
+                    console.log(gradient(['#ffffff', '#888888', '#333333', '#888888', '#ffffff'])('\n\n👋 Thank you for using grok-4-1-fast CLI!\n'));
                     shouldExit = true;
                     continue;
                 }
@@ -1497,13 +1389,13 @@ const program = new Command();
 
 program
     .name('grok')
-    .description('Professional CLI for xAI Grok-4 API')
+    .description('Professional CLI for xAI grok-4-1-fast API')
     .version('2.0.0');
 
 program
     .command('chat <message>')
     .description('Send a message to Grok')
-    .option('-m, --model <model>', 'Model to use', 'grok-4')
+    .option('-m, --model <model>', 'Model to use', 'grok-4-1-fast')
     .option('-s, --stream', 'Stream the response')
     .option('-t, --tools', 'Enable function calling')
     .option('--search <mode>', 'Live Search mode (auto/on/off)', 'auto')
@@ -1524,7 +1416,7 @@ program
         const spinner = ora('Generating image...').start();
         try {
             const response = await client.images.generate({
-                model: 'grok-2-image-1212',
+                model: 'grok-2-image-latest',
                 prompt: prompt,
                 n: options.number,
                 response_format: 'url'
@@ -1566,7 +1458,7 @@ program
 
 program
     .command('vision <imagePath> <question>')
-    .description('Analyze an image with Grok-4 vision')
+    .description('Analyze an image with grok-4-1-fast vision')
     .action(async (imagePath, question) => {
         if (!fs.existsSync(imagePath)) {
             console.error(chalk.red('Error: Image file not found'));
@@ -1583,7 +1475,7 @@ program
             const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
             
             const response = await client.chat.completions.create({
-                model: 'grok-4',
+                model: 'grok-4-1-fast',
                 messages: [{
                     role: 'user',
                     content: [
@@ -1620,7 +1512,7 @@ program
         
         try {
             const response = await client.chat.completions.create({
-                model: 'grok-4',
+                model: 'grok-4-1-fast',
                 messages: [{ role: 'user', content: query }],
                 search_parameters: {
                     mode: 'on',
